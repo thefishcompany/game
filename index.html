@@ -2,168 +2,128 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Midnight Phantasm - Prologue</title>
+    <title>Midnight Phantasm - Exploration</title>
     <style>
-        /* 깔끔한 폰트 적용 */
-        @import url('https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&display=swap');
-        
-        body { 
-            background: #000; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
-            margin: 0; 
-            font-family: 'Nanum Gothic', sans-serif; 
-        }
-
-        /* 게임 화면 컨테이너 (800x600 고정) */
-        #game-container { 
-            position: relative; 
-            width: 800px; 
-            height: 600px; 
-            /* 임시 배경: 어두운 학교 느낌의 무료 이미지 */
-            background: url('https://images.unsplash.com/photo-1580584126903-c17d41830450?q=80&w=800&auto=format&fit=crop') no-repeat center/cover; 
-            overflow: hidden; 
-            border: 2px solid #333; 
-            box-shadow: 0 0 30px rgba(0,0,0,0.9); 
-        }
-
-        /* 야간 효과 (어둡게 덮기) */
-        #overlay { 
-            position: absolute; 
-            top: 0; left: 0; 
-            width: 100%; height: 100%; 
-            background: rgba(0, 5, 20, 0.7); 
-            pointer-events: none; 
-        }
-        
-        /* 대화창 UI */
-        #dialogue-box { 
-            position: absolute; 
-            bottom: 20px; 
-            left: 50%; 
-            transform: translateX(-50%); 
-            width: 90%; 
-            height: 150px; 
-            background: rgba(0, 0, 0, 0.85); 
-            border: 2px solid #555; 
-            border-radius: 10px; 
-            color: white; 
-            padding: 20px; 
-            box-sizing: border-box; 
-            cursor: pointer; 
-            display: flex; 
-            flex-direction: column; 
-            user-select: none;
-        }
-
-        #speaker-name { 
-            font-size: 1.2rem; 
-            font-weight: bold; 
-            color: #ffeb3b; 
-            margin-bottom: 15px; 
-            text-shadow: 0 0 5px #ffeb3b;
-        }
-
-        #dialogue-text { 
-            font-size: 1.1rem; 
-            line-height: 1.6; 
-        }
-
-        /* 클릭 유도 깜빡임 효과 */
-        .blink { 
-            animation: blinker 1s linear infinite; 
-            font-size: 0.9rem; 
-            color: #aaa; 
-            align-self: flex-end; 
-            margin-top: auto; 
-        }
-        @keyframes blinker { 50% { opacity: 0; } }
+        body { margin: 0; background: #000; overflow: hidden; color: white; font-family: sans-serif; }
+        canvas { display: block; cursor: crosshair; }
+        #ui-layer { position: absolute; top: 10px; left: 10px; pointer-events: none; }
     </style>
 </head>
 <body>
-    <div id="game-container">
-        <div id="overlay"></div>
-        <div id="dialogue-box">
-            <div id="speaker-name"></div>
-            <div id="dialogue-text"></div>
-            <div class="blink">클릭하여 진행 ▼</div>
-        </div>
+    <div id="ui-layer">
+        <h2>탐험 모드</h2>
+        <p>이동: W A S D | 손전등 조준: 마우스</p>
     </div>
+    
+    <canvas id="gameCanvas"></canvas>
 
     <script>
-        // 대본 (스토리 데이터)
-        const story = [
-            { speaker: "???", text: "......" },
-            { speaker: "???", text: "야, 일어나..." },
-            { speaker: "나", text: "(머리가 깨질 것 같다. 분명 야간자율학습 중이었는데...)" },
-            { speaker: "나", text: "여긴... 우리 학교 교실? 왜 이렇게 어둡지? 정전인가?" },
-            { speaker: "시스템", text: "[경고] 자정이 지났습니다. '나이트메어 구역'으로 동기화됩니다." },
-            { speaker: "나", text: "뭐? 무슨 소리야. 복도에서 이상한 소리가 들려..." }
-        ];
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
 
-        let currentLine = 0;
-        let isTyping = false;
-        let textInterval;
-        
-        const speakerEl = document.getElementById("speaker-name");
-        const textEl = document.getElementById("dialogue-text");
-        const dialogueBox = document.getElementById("dialogue-box");
-
-        // 한 글자씩 찍히는 타이핑 효과
-        function typeWriter(text, i, callback) {
-            if (i < text.length) {
-                textEl.innerHTML += text.charAt(i);
-                textInterval = setTimeout(() => typeWriter(text, i + 1, callback), 40); // 40ms 마다 한 글자
-            } else {
-                isTyping = false;
-                callback();
-            }
+        // 화면 크기에 맞게 캔버스 설정
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
         }
+        window.addEventListener('resize', resize);
+        resize();
 
-        function showDialogue() {
-            // 대본이 끝나면
-            if (currentLine >= story.length) {
-                dialogueBox.style.display = 'none';
-                alert("오프닝 컷씬 종료! 이제 주인공을 움직이는 탐험 모드로 전환됩니다.");
-                // TODO: 여기에 캐릭터 이동 모드를 실행하는 함수 호출
-                return;
-            }
+        // 플레이어 설정
+        const player = { x: canvas.width / 2, y: canvas.height / 2, radius: 15, speed: 4 };
+        const keys = {};
+        const mouse = { x: canvas.width / 2, y: canvas.height / 2 - 100 };
 
-            isTyping = true;
-            const line = story[currentLine];
-            speakerEl.innerText = line.speaker;
-            
-            // 시스템 메시지일 경우 글씨 색상 변경
-            if(line.speaker === "시스템") {
-                speakerEl.style.color = "#ff4444";
-                speakerEl.style.textShadow = "0 0 5px #ff4444";
-            } else {
-                speakerEl.style.color = "#ffeb3b";
-                speakerEl.style.textShadow = "0 0 5px #ffeb3b";
-            }
-
-            textEl.innerHTML = "";
-            typeWriter(line.text, 0, () => {});
-        }
-
-        // 마우스 클릭 이벤트
-        dialogueBox.addEventListener("click", () => {
-            if (isTyping) {
-                // 타이핑 중일 때 클릭하면, 스킵하고 전체 문장 바로 보여주기
-                clearTimeout(textInterval);
-                textEl.innerHTML = story[currentLine].text;
-                isTyping = false;
-            } else {
-                // 타이핑이 다 끝났을 때 클릭하면 다음 대사로
-                currentLine++;
-                showDialogue();
-            }
+        // 입력 감지
+        window.addEventListener("keydown", (e) => keys[e.code] = true);
+        window.addEventListener("keyup", (e) => keys[e.code] = false);
+        window.addEventListener("mousemove", (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
         });
 
-        // 게임 시작!
-        showDialogue();
+        // 맵의 임시 장애물 (나중에 진짜 맵 디자인으로 교체)
+        const obstacles = [
+            { x: 200, y: 200, w: 100, h: 100 },
+            { x: 600, y: 300, w: 50, h: 200 },
+            { x: 400, y: 600, w: 300, h: 50 }
+        ];
+
+        function update() {
+            // 이동 로직
+            if (keys["KeyW"]) player.y -= player.speed;
+            if (keys["KeyS"]) player.y += player.speed;
+            if (keys["KeyA"]) player.x -= player.speed;
+            if (keys["KeyD"]) player.x += player.speed;
+        }
+
+        function draw() {
+            // 1. 기본 배경 (어두운 바닥)
+            ctx.fillStyle = "#1a1a1a";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 2. 바닥 패턴 (그리드)
+            ctx.strokeStyle = "#222";
+            for(let i = 0; i < canvas.width; i += 50) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke(); }
+            for(let i = 0; i < canvas.height; i += 50) { ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke(); }
+
+            // 3. 장애물 그리기
+            ctx.fillStyle = "#444";
+            obstacles.forEach(obs => {
+                ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+                ctx.strokeStyle = "#000";
+                ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+            });
+
+            // 4. 플레이어 그리기
+            ctx.fillStyle = "#fff";
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 5. 어둠 및 손전등 효과 (Global Composite Operation 사용)
+            // 전체를 까맣게 덮을 캔버스 상태 저장
+            ctx.save();
+            ctx.globalCompositeOperation = 'source-over';
+            
+            // 어둠의 정도 (0.95 = 거의 안보임)
+            ctx.fillStyle = "rgba(0, 0, 0, 0.95)"; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 손전등 구멍 뚫기 (마우스 방향으로 부채꼴 모양 조명)
+            ctx.globalCompositeOperation = 'destination-out';
+            
+            const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+            const beamLength = 400; // 손전등이 닿는 거리
+            const beamWidth = 0.6;  // 손전등이 퍼지는 각도
+
+            // 부채꼴 그라데이션
+            const gradient = ctx.createRadialGradient(player.x, player.y, 0, player.x, player.y, beamLength);
+            gradient.addColorStop(0, "rgba(255, 255, 255, 1)"); // 시작점은 밝음
+            gradient.addColorStop(1, "rgba(255, 255, 255, 0)"); // 끝점은 흐려짐
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.moveTo(player.x, player.y);
+            ctx.arc(player.x, player.y, beamLength, angle - beamWidth, angle + beamWidth);
+            ctx.lineTo(player.x, player.y);
+            ctx.fill();
+            
+            // 플레이어 주변 희미한 불빛 (내 발밑은 보이게)
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, 60, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+            ctx.fill();
+
+            ctx.restore();
+
+            requestAnimationFrame(() => {
+                update();
+                draw();
+            });
+        }
+
+        draw();
     </script>
 </body>
 </html>
