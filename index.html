@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>CYBER-NET: COLLISION</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --neon-blue: #00f3ff;
+            --neon-pink: #ff00ff;
+            --bg-dark: #0a0a0c;
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-dark);
+            color: white;
+            font-family: 'Orbitron', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            color: var(--neon-blue);
+            text-shadow: 0 0 10px var(--neon-blue), 0 0 20px var(--neon-blue);
+            letter-spacing: 5px;
+        }
+
+        #game-container {
+            position: relative;
+            padding: 5px;
+            background: linear-gradient(45deg, var(--neon-blue), var(--neon-pink));
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(0, 243, 255, 0.3);
+        }
+
+        canvas {
+            display: block;
+            background: #111;
+            border-radius: 5px;
+            cursor: crosshair;
+        }
+
+        .status-panel {
+            margin-top: 20px;
+            font-size: 0.9rem;
+            color: #888;
+            border: 1px dashed #444;
+            padding: 10px 20px;
+        }
+
+        .online-count {
+            color: var(--neon-pink);
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>CYBER-NET</h1>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="500"></canvas>
+    </div>
+
+    <div class="status-panel">
+        SYSTEM STATUS: <span class="online-count" id="userCount">CONNECTING...</span> PLAYERS ONLINE
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue, onDisconnect } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+
+        // ⚠️ 본인의 Firebase 설정을 여기에 넣어주세요!
+        const firebaseConfig = {
+            apiKey: "AIzaSyADgpfzj4-OCogjChrIwpIizjg-a6tiXzQ",
+            databaseURL: "https://game-49890-default-rtdb.firebaseio.com",
+            projectId: "game-49890",
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        const userId = "USER_" + Math.floor(Math.random() * 9999);
+        const playerRef = ref(db, `players/${userId}`);
+        const allPlayersRef = ref(db, 'players');
+
+        let players = {};
+        let myPos = { x: 400, y: 250, color: Math.random() > 0.5 ? '#00f3ff' : '#ff00ff', name: userId };
+
+        // 접속 및 해제 설정
+        set(playerRef, myPos);
+        onDisconnect(playerRef).remove();
+
+        // 조작 (부드러운 이동을 위해 속도값 조절 가능)
+        window.addEventListener("keydown", (e) => {
+            const speed = 10;
+            if (e.key === "ArrowUp") myPos.y -= speed;
+            if (e.key === "ArrowDown") myPos.y += speed;
+            if (e.key === "ArrowLeft") myPos.x -= speed;
+            if (e.key === "ArrowRight") myPos.x += speed;
+            set(playerRef, myPos);
+        });
+
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const userCountEl = document.getElementById("userCount");
+
+        onValue(allPlayersRef, (snapshot) => {
+            players = snapshot.val() || {};
+            userCountEl.innerText = Object.keys(players).length;
+            draw();
+        });
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 격자무늬 배경 (사이버펑크 느낌)
+            ctx.strokeStyle = "#222";
+            for(let i=0; i<canvas.width; i+=40) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
+            for(let i=0; i<canvas.height; i+=40) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); ctx.stroke(); }
+
+            for (let id in players) {
+                const p = players[id];
+                
+                // 캐릭터 본체 (빛나는 효과)
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = p.color;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 12, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 이름표
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = "white";
+                ctx.font = "10px Orbitron";
+                ctx.textAlign = "center";
+                ctx.fillText(p.name, p.x, p.y - 20);
+            }
+        }
+    </script>
+</body>
+</html>
