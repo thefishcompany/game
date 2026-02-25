@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>PROJECT: ECHO</title>
+    <title>PROJECT: ECHO - Weapon Update</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&display=swap');
         
@@ -12,17 +12,19 @@
         }
         
         #game-container { position: relative; width: 100vw; height: 100vh; }
-        
         canvas { position: absolute; top: 0; left: 0; }
-        #lightCanvas { pointer-events: none; } /* 빛 캔버스는 마우스 클릭 통과 */
+        #lightCanvas { pointer-events: none; } 
 
-        /* UI 레이어 */
         #ui-layer { 
             position: absolute; top: 15px; left: 15px; z-index: 10; 
             text-shadow: 1px 1px 2px black; color: #888; font-size: 0.9rem;
         }
+        
+        /* 무기 상태 UI 추가 */
+        #weapon-status {
+            color: #ff4444; font-weight: bold; font-size: 1.2rem; margin-top: 10px; display: none;
+        }
 
-        /* 대화창 UI */
         #dialogue-box { 
             position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); 
             width: 80%; max-width: 800px; height: 150px; 
@@ -34,7 +36,6 @@
         #speaker-name { font-size: 1.2rem; font-weight: bold; margin-bottom: 10px; }
         #dialogue-text { font-size: 1.1rem; line-height: 1.6; }
         
-        /* 상호작용 알림 UI */
         #interaction-prompt {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             font-size: 1.2rem; font-weight: bold; color: #ffeb3b;
@@ -49,10 +50,11 @@
         <canvas id="lightCanvas"></canvas>
 
         <div id="ui-layer">
-            <div>PROJECT: ECHO | Alpha Build</div>
+            <div>PROJECT: ECHO | 무기 획득 테스트</div>
             <div id="controls-info" style="display:none; color: #00ffcc; margin-top: 10px;">
-                [W,A,S,D] 이동 | [마우스] 손전등 조준 | [E] 조사하기
+                [W,A,S,D] 이동 | [마우스] 조준 | [좌클릭] 사격 | [E] 조사
             </div>
+            <div id="weapon-status">무기: 낡은 권총 장착됨</div>
         </div>
 
         <div id="interaction-prompt">[E] 키를 눌러 조사하기</div>
@@ -64,7 +66,6 @@
     </div>
 
     <script>
-        // === 1. 캔버스 및 기본 셋업 ===
         const gameCanvas = document.getElementById("gameCanvas");
         const ctx = gameCanvas.getContext("2d");
         const lightCanvas = document.getElementById("lightCanvas");
@@ -77,47 +78,58 @@
         window.addEventListener('resize', resize);
         resize();
 
-        // === 2. 게임 상태 관리 ===
-        let gameState = "STORY"; // "STORY", "EXPLORE"
+        let gameState = "STORY"; 
         
-        // 플레이어 데이터
-        const player = { x: window.innerWidth / 2, y: window.innerHeight / 2, radius: 15, speed: 4 };
+        // 플레이어 상태에 무기(hasWeapon) 추가
+        const player = { x: window.innerWidth / 2, y: window.innerHeight / 2, radius: 15, speed: 4, hasWeapon: false };
         const keys = {};
         const mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 - 100 };
+        const bullets = []; // 총알 배열
 
         window.addEventListener("keydown", (e) => keys[e.code] = true);
         window.addEventListener("keyup", (e) => keys[e.code] = false);
         window.addEventListener("mousemove", (e) => { mouse.x = e.clientX; mouse.y = e.clientY; });
 
-        // === 3. 스토리 및 대화 시스템 ===
+        // 마우스 클릭 시 사격 (무기가 있고, 탐험 모드일 때만)
+        window.addEventListener("mousedown", (e) => {
+            if (gameState === "EXPLORE" && player.hasWeapon) {
+                const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+                bullets.push({
+                    x: player.x,
+                    y: player.y,
+                    vx: Math.cos(angle) * 15, // 총알 속도 X
+                    vy: Math.sin(angle) * 15, // 총알 속도 Y
+                    radius: 3
+                });
+            }
+        });
+
         const dialogueBox = document.getElementById("dialogue-box");
         const speakerEl = document.getElementById("speaker-name");
         const textEl = document.getElementById("dialogue-text");
         const promptEl = document.getElementById("interaction-prompt");
         const controlsInfo = document.getElementById("controls-info");
+        const weaponStatus = document.getElementById("weapon-status");
 
         let currentStory = [];
         let currentLine = 0;
         let isTyping = false;
         let textInterval;
 
-        // 씬 1: 오프닝 대본
         const introStory = [
-            { speaker: "???", color: "#888", text: "......" },
-            { speaker: "나", color: "#fff", text: "(머리가 깨질 것 같다... 여긴 어디지?)" },
-            { speaker: "나", color: "#fff", text: "너무 어두워서 아무것도 안 보여. 바닥은 차갑고... 쇠 냄새가 나." },
-            { speaker: "시스템", color: "#ff4444", text: "[경고] 지하 7층 B구역 전력 차단. 격리실 개방됨." },
-            { speaker: "시스템", color: "#ff4444", text: "[경고] 미식별 생명체 탈출. 전 직원 즉시 대피하십시오." },
-            { speaker: "나", color: "#fff", text: "격리실? 생명체...? 미치겠군. 일단 여기서 빠져나가야 해." },
-            { speaker: "나", color: "#fff", text: "(다행히 주머니에 손전등이 있다. 켜보자.)" }
+            { speaker: "나", color: "#fff", text: "(너무 어두워서 아무것도 안 보여... 손전등부터 켜야겠다.)" }
         ];
 
-        // 씬 2: 아이템 발견 대본
         const itemStory = [
-            { speaker: "나", color: "#fff", text: "누군가 떨어뜨린 연구 일지다. 피가 묻어있어..." },
-            { speaker: "연구 일지", color: "#00ffcc", text: "『10월 24일. 실험체 042는 빛에 극도로 민감하게 반응한다.』" },
-            { speaker: "연구 일지", color: "#00ffcc", text: "『만약 비상사태가 발생하면 절대 어둠 속에 혼자 있지 마라...』" },
-            { speaker: "나", color: "#fff", text: "빛을 싫어하는 괴물이 돌아다닌다는 뜻인가? 무기부터 찾아야겠어." }
+            { speaker: "연구 일지", color: "#00ffcc", text: "『실험체 042는 빛에 극도로 민감하게 반응한다...』" }
+        ];
+
+        // 새로운 무기 획득 스토리
+        const weaponStory = [
+            { speaker: "나", color: "#fff", text: "경비원의 시체다... 심하게 훼손되어 있어." },
+            { speaker: "나", color: "#fff", text: "손에 무언가를 꽉 쥐고 죽었군. 이건..." },
+            { speaker: "시스템", color: "#ff4444", text: "[낡은 권총]을 획득했습니다. (마우스 좌클릭으로 발사 가능)" },
+            { speaker: "나", color: "#fff", text: "총알이 들어있어. 이제 나타나기만 해봐라." }
         ];
 
         function startDialogue(storyData) {
@@ -129,10 +141,10 @@
             showDialogue();
         }
 
-        function typeWriter(text, i, callback) {
+        function typeWriter(text, i) {
             if (i < text.length) {
                 textEl.innerHTML += text.charAt(i);
-                textInterval = setTimeout(() => typeWriter(text, i + 1, callback), 30);
+                textInterval = setTimeout(() => typeWriter(text, i + 1), 30);
             } else {
                 isTyping = false;
             }
@@ -140,13 +152,11 @@
 
         function showDialogue() {
             if (currentLine >= currentStory.length) {
-                // 대화 종료 후 탐험 모드로 전환
                 dialogueBox.style.display = 'none';
                 controlsInfo.style.display = "block";
                 gameState = "EXPLORE";
                 return;
             }
-
             isTyping = true;
             const line = currentStory[currentLine];
             speakerEl.innerText = line.speaker;
@@ -166,52 +176,62 @@
             }
         });
 
-        // === 4. 맵과 상호작용 오브젝트 ===
+        // 맵에 배치된 상호작용 아이템들
         const interactables = [
-            { x: window.innerWidth / 2 + 200, y: window.innerHeight / 2 - 50, radius: 20, color: "#00ffcc", active: true, story: itemStory }
+            { id: "log", x: window.innerWidth / 2 + 200, y: window.innerHeight / 2 - 50, radius: 15, color: "#00ffcc", active: true, story: itemStory },
+            // 새로운 무기 아이템 추가 (빨간색)
+            { id: "weapon", x: window.innerWidth / 2 - 200, y: window.innerHeight / 2 + 100, radius: 15, color: "#ff4444", active: true, story: weaponStory }
         ];
 
-        // === 5. 메인 게임 루프 ===
         function update() {
             if (gameState === "EXPLORE") {
-                // 1. 이동 처리
                 if (keys["KeyW"]) player.y -= player.speed;
                 if (keys["KeyS"]) player.y += player.speed;
                 if (keys["KeyA"]) player.x -= player.speed;
                 if (keys["KeyD"]) player.x += player.speed;
 
-                // 2. 상호작용 물체와의 거리 체크
+                // 총알 이동
+                bullets.forEach((b, index) => {
+                    b.x += b.vx;
+                    b.y += b.vy;
+                    // 화면 밖으로 나가면 총알 삭제
+                    if (b.x < 0 || b.x > window.innerWidth || b.y < 0 || b.y > window.innerHeight) {
+                        bullets.splice(index, 1);
+                    }
+                });
+
                 let canInteract = false;
                 interactables.forEach(item => {
                     if (item.active) {
                         const dist = Math.hypot(player.x - item.x, player.y - item.y);
-                        if (dist < 80) { // 가까이 다가가면
+                        if (dist < 80) { 
                             canInteract = true;
                             if (keys["KeyE"]) {
-                                item.active = false; // 한 번 읽으면 비활성화
+                                item.active = false; 
                                 startDialogue(item.story);
-                                keys["KeyE"] = false; // 중복 입력 방지
+                                keys["KeyE"] = false; 
+                                
+                                // 무기를 먹었을 때 상태 변경
+                                if(item.id === "weapon") {
+                                    player.hasWeapon = true;
+                                    weaponStatus.style.display = "block";
+                                }
                             }
                         }
                     }
                 });
-
-                // 상호작용 알림창 표시 유무
                 promptEl.style.display = canInteract ? "block" : "none";
             }
         }
 
         function draw() {
-            // 메인 캔버스: 바닥과 오브젝트
-            ctx.fillStyle = "#1a1a24"; // 차가운 연구소 바닥
+            ctx.fillStyle = "#1a1a24"; 
             ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
 
-            // 타일 패턴
             ctx.strokeStyle = "#223";
             for(let i=0; i<gameCanvas.width; i+=100) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,gameCanvas.height); ctx.stroke(); }
             for(let i=0; i<gameCanvas.height; i+=100) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(gameCanvas.width,i); ctx.stroke(); }
 
-            // 상호작용 가능한 아이템 (빛나는 효과)
             interactables.forEach(item => {
                 if (item.active) {
                     ctx.shadowBlur = 20;
@@ -220,8 +240,16 @@
                     ctx.beginPath();
                     ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
                     ctx.fill();
-                    ctx.shadowBlur = 0; // 초기화
+                    ctx.shadowBlur = 0; 
                 }
+            });
+
+            // 총알 그리기 (노란색 궤적)
+            ctx.fillStyle = "#ffeb3b";
+            bullets.forEach(b => {
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+                ctx.fill();
             });
 
             // 플레이어
@@ -232,16 +260,14 @@
 
             // === 조명 캔버스 (어둠과 손전등) ===
             lightCtx.globalCompositeOperation = "source-over";
-            
-            // 스토리 모드일 때는 화면을 완전히 까맣게, 탐험 모드일 때는 조금 보이게
             const darkness = gameState === "STORY" ? "rgba(0,0,0,1)" : "rgba(0, 0, 0, 0.98)";
             lightCtx.fillStyle = darkness; 
             lightCtx.fillRect(0, 0, lightCanvas.width, lightCanvas.height);
 
-            // 탐험 모드일 때만 손전등 켜짐
             if (gameState === "EXPLORE") {
                 lightCtx.globalCompositeOperation = "destination-out";
                 
+                // 손전등 불빛
                 const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
                 const gradient = lightCtx.createRadialGradient(player.x, player.y, 0, player.x, player.y, 600);
                 gradient.addColorStop(0, "rgba(255, 255, 255, 1)");   
@@ -255,11 +281,18 @@
                 lightCtx.lineTo(player.x, player.y);
                 lightCtx.fill();
                 
-                // 캐릭터 주변 기본 시야
                 lightCtx.beginPath();
                 lightCtx.arc(player.x, player.y, 60, 0, Math.PI * 2);
                 lightCtx.fillStyle = "rgba(255, 255, 255, 0.3)";
                 lightCtx.fill();
+
+                // 총알이 날아갈 때 주변 어둠을 밝히는 효과 (총알 불빛)
+                bullets.forEach(b => {
+                    lightCtx.beginPath();
+                    lightCtx.arc(b.x, b.y, 30, 0, Math.PI * 2);
+                    lightCtx.fillStyle = "rgba(255, 255, 255, 0.8)";
+                    lightCtx.fill();
+                });
             }
 
             requestAnimationFrame(() => {
@@ -268,9 +301,8 @@
             });
         }
 
-        // 게임 초기화
         draw();
-        startDialogue(introStory); // 오프닝 스토리로 게임 시작!
+        startDialogue(introStory); 
     </script>
 </body>
 </html>
