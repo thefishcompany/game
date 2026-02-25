@@ -11,6 +11,8 @@
         #lightCanvas { pointer-events: none; } 
 
         #ui-layer { position: absolute; top: 15px; left: 15px; z-index: 10; text-shadow: 1px 1px 2px black; color: #aaa; font-size: 0.9rem; }
+        /* 💡 적용 확인용 형광색 타이틀 */
+        #version-title { color: #ffeb3b; font-size: 1.2rem; font-weight: bold; margin-bottom: 5px; animation: blink 1s infinite alternate; }
         #weapon-status { color: #ffeb3b; font-weight: bold; font-size: 1.2rem; margin-top: 10px; display: none; }
         #mission-status { color: #00ffcc; font-weight: bold; font-size: 1.2rem; margin-top: 5px; }
         
@@ -23,9 +25,10 @@
         #warning-box {
             position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
             color: #ff4444; font-size: 4rem; font-weight: bold; text-shadow: 0 0 30px red;
-            display: none; z-index: 15; animation: blink 0.3s infinite alternate; pointer-events: none;
+            display: none; z-index: 15; animation: blinkWarning 0.3s infinite alternate; pointer-events: none;
         }
-        @keyframes blink { from { opacity: 1; transform: translateX(-50%) scale(1); } to { opacity: 0.2; transform: translateX(-50%) scale(1.1); } }
+        @keyframes blinkWarning { from { opacity: 1; transform: translateX(-50%) scale(1); } to { opacity: 0.2; transform: translateX(-50%) scale(1.1); } }
+        @keyframes blink { from { opacity: 1; } to { opacity: 0.5; } }
 
         #dialogue-box { 
             position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); 
@@ -49,7 +52,7 @@
         <canvas id="lightCanvas"></canvas>
 
         <div id="ui-layer">
-            <div>나이트메어 스쿨 | 심연의 복도</div>
+            <div id="version-title">나이트메어 스쿨 | 대탈출 확장팩 (적용 완료!)</div>
             <div id="controls-info" style="color: #00ffcc; margin-top: 10px;">[W,A,S,D] 이동 | [마우스] 조준 | [좌클릭 꾹 누르기] 자동 사격 | [E] 조사</div>
             <div id="mission-status">목표: 1학년 1반 교실을 수색해 단서를 찾으세요.</div>
             <div id="weapon-status">무기: 없음</div>
@@ -80,7 +83,6 @@
 
         let gameState = "STORY"; 
         
-        // 속도 대폭 상향 (Fast-paced)
         const player = { x: 100, y: 450, radius: 15, speed: 7, hasWeapon: false };
         const camera = { x: 0, y: 0 }; 
         const keys = {};
@@ -88,16 +90,13 @@
         const bullets = []; 
         const monsters = [];
 
-        // 기관총 설정 (연사 속도 약간 상향)
         let isMouseDown = false;
         let lastShotTime = 0;
-        const fireRate = 100; // 0.1초마다 한 발 (더 시원하게)
+        const fireRate = 100; // 0.1초 연사
 
-        // 생존 모드 (1분 디펜스) 타이머 변수
         let isSurvivalActive = false;
         let survivalStartTime = 0;
         let lastSpawnTime = 0;
-
         let isChaseActive = false; 
 
         window.addEventListener("keydown", (e) => keys[e.code] = true);
@@ -115,38 +114,31 @@
         const warningBox = document.getElementById("warning-box");
         const timerBox = document.getElementById("timer-box");
 
-        // === 미친듯이 넓어진 맵 디자인 (길이 8000px) ===
+        // 미친듯이 넓어진 맵 디자인 (길이 8000px)
         let walls = [
-            // 외곽 테두리
             { id: "wall", x: -100, y: -200, w: 8500, h: 50 }, 
             { id: "wall", x: -100, y: 800,  w: 8500, h: 50 }, 
-            { id: "wall", x: -50,  y: -200, w: 50, h: 1050 },  // 서쪽 끝 (시작/탈출구)
-            { id: "wall", x: 8400, y: -200, w: 50, h: 1050 },  // 동쪽 끝
+            { id: "wall", x: -50,  y: -200, w: 50, h: 1050 },  
+            { id: "wall", x: 8400, y: -200, w: 50, h: 1050 },  
 
-            // 복도 긴 벽
             { id: "wall", x: 0, y: 350, w: 300, h: 50 },     
             { id: "wall", x: 450, y: 350, w: 550, h: 50 },   
             { id: "wall", x: 1150, y: 350, w: 2350, h: 50 }, 
             
-            // 보안 게이트 (생존 모드 전까지 길을 막는 벽)
-            { id: "security_gate", x: 3500, y: 400, w: 50, h: 400 }, 
+            { id: "security_gate", x: 3500, y: 400, w: 50, h: 400 }, // 보안 게이트
 
-            // 생존 구역 이후의 긴 복도와 방들
             { id: "wall", x: 3500, y: 350, w: 2500, h: 50 },
             { id: "wall", x: 6200, y: 350, w: 2000, h: 50 },
 
-            // 세로 벽들 (방 나누기)
             { id: "wall", x: 300, y: -200, w: 50, h: 550 },   
             { id: "wall", x: 1000, y: -200, w: 50, h: 550 },  
             { id: "wall", x: 1800, y: -200, w: 50, h: 550 },
             { id: "wall", x: 4500, y: -200, w: 50, h: 550 },
             { id: "wall", x: 6000, y: -200, w: 50, h: 550 },
             
-            // 최종 교장실 벽 (x: 7500)
             { id: "wall", x: 7500, y: -200, w: 50, h: 500 },  
             { id: "wall", x: 7500, y: 450, w: 50, h: 350 },   
 
-            // 내부 장애물 (곳곳에 널린 책상들 - 추격전 때 방해물 역할)
             { id: "desk", x: 450, y: -50, w: 150, h: 50 },  
             { id: "desk", x: 700, y: 150, w: 150, h: 50 },  
             { id: "desk", x: 1200, y: 50, w: 150, h: 50 },  
@@ -154,35 +146,32 @@
             { id: "desk", x: 4000, y: 600, w: 200, h: 50 },
             { id: "desk", x: 5500, y: 400, w: 50, h: 200 },
             { id: "desk", x: 6800, y: 100, w: 300, h: 100 },
-            { id: "desk", x: 8000, y: 200, w: 200, h: 100 } // 교장실 책상
+            { id: "desk", x: 8000, y: 200, w: 200, h: 100 } 
         ];
 
-        // 대본 추가
         const introStory = [
-            { speaker: "나", color: "#fff", text: "(야간 자율학습 중 정전이 일어났다. 학교가 끝없이 넓어진 기분이다.)" },
-            { speaker: "나", color: "#fff", text: "위쪽의 1학년 1반 교실에 들어가서 랜턴이나 쓸만한 걸 찾아보자." }
+            { speaker: "나", color: "#fff", text: "(정전이다. 길이 끝도 없이 넓어진 기분이야...)" },
+            { speaker: "나", color: "#fff", text: "위쪽의 1반 교실에 들어가서 쓸만한 걸 찾아보자." }
         ];
 
         const logStory = [
-            { speaker: "순찰 일지", color: "#00ffcc", text: "『이곳의 녀석들은 모터 소리나 총소리를 들으면 미친듯이 몰려온다.』" },
-            { speaker: "나", color: "#fff", text: "소리에 반응한다라... 옆의 1학년 2반 교실에서 무기를 찾아보자." }
+            { speaker: "순찰 일지", color: "#00ffcc", text: "『이곳의 녀석들은 소리에 미친듯이 몰려온다.』" },
+            { speaker: "나", color: "#fff", text: "옆의 2반 교실에서 무기를 찾아보자." }
         ];
 
         const weaponStory = [
             { speaker: "시스템", color: "#ffeb3b", text: "[개조된 전동 네일건] 획득! (좌클릭 시 연속 발사)" },
-            { speaker: "나", color: "#fff", text: "이제 싸울 수 있겠어. 복도를 따라 계속 오른쪽으로 가보자." }
+            { speaker: "나", color: "#fff", text: "이제 싸울 수 있겠어. 복도를 따라 오른쪽으로 가보자." }
         ];
 
         const consoleStory = [
-            { speaker: "보안 콘솔", color: "#00ffcc", text: "『교장실로 가는 보안 게이트가 잠겨 있습니다. 해킹하시겠습니까?』" },
-            { speaker: "나", color: "#fff", text: "해킹을 시작하면 엄청난 경고음이 울릴텐데... 괴물들이 몰려올 거야." },
+            { speaker: "보안 콘솔", color: "#00ffcc", text: "『보안 게이트가 잠겨 있습니다. 해킹하시겠습니까?』" },
             { speaker: "시스템", color: "#ff4444", text: "[경고] 보안 해제까지 60초 소요. 생명 신호 다수 접근 중!!" },
             { speaker: "나", color: "#fff", text: "젠장, 온다!! 1분 동안 여기서 살아남아야 해!" }
         ];
 
         const keyStory = [
             { speaker: "시스템", color: "#ffeb3b", text: "[현관 마스터 키] 획득! 1층 출구로 돌아가 탈출하십시오." },
-            { speaker: "나", color: "#fff", text: "드디어 찾았다. 이제 맨 처음 시작했던 왼쪽 끝으로 돌아가면..." },
             { speaker: "???", color: "#ff4444", text: "KIIIIEEEEEEAAAKK!!!! (콰앙!!)" },
             { speaker: "나", color: "#fff", text: "뭐, 뭐야 이 미친 크기는?! 돌아가는 길에도 잔챙이들이 깔렸잖아!" },
             { speaker: "나", color: "#fff", text: "뒤돌아보지 말고 왼쪽 끝까지 무조건 달려!!!" }
@@ -219,7 +208,7 @@
         const interactables = [
             { id: "log", x: 800, y: -50, radius: 15, color: "#00ffcc", active: true, story: logStory }, 
             { id: "weapon", x: 1600, y: 100, radius: 15, color: "#ffeb3b", active: true, story: weaponStory }, 
-            { id: "console", x: 3400, y: 600, radius: 20, color: "#ff8800", active: true, story: consoleStory }, // 1분 생존 트리거
+            { id: "console", x: 3400, y: 600, radius: 20, color: "#ff8800", active: true, story: consoleStory }, 
             { id: "master_key", x: 8100, y: 250, radius: 15, color: "#ff4444", active: true, story: keyStory } 
         ];
 
@@ -232,7 +221,6 @@
 
         function update() {
             if (gameState === "EXPLORE") {
-                // 1. 플레이어 이동 (속도 상향됨)
                 let nextX = player.x; let nextY = player.y;
                 if (keys["KeyW"]) nextY -= player.speed;
                 if (keys["KeyS"]) nextY += player.speed;
@@ -244,7 +232,6 @@
                 camera.x = player.x - window.innerWidth / 2;
                 camera.y = player.y - window.innerHeight / 2;
 
-                // 2. 기관총 발사 (총알 속도 30으로 초고속)
                 if (player.hasWeapon && isMouseDown) {
                     const now = Date.now();
                     if (now - lastShotTime > fireRate) {
@@ -256,43 +243,28 @@
                     }
                 }
 
-                // 3. 총알 이동
                 for (let i = bullets.length - 1; i >= 0; i--) {
-                    let b = bullets[i];
-                    b.x += b.vx; b.y += b.vy;
+                    let b = bullets[i]; b.x += b.vx; b.y += b.vy;
                     let hitWall = false;
-                    for (let w of walls) {
-                        if (b.x > w.x && b.x < w.x + w.w && b.y > w.y && b.y < w.y + w.h) { hitWall = true; break; }
-                    }
+                    for (let w of walls) { if (b.x > w.x && b.x < w.x + w.w && b.y > w.y && b.y < w.y + w.h) { hitWall = true; break; } }
                     if (hitWall || Math.hypot(b.x - player.x, b.y - player.y) > 1200) { bullets.splice(i, 1); }
                 }
 
-                // === 4. 1분 생존(디펜스) 모드 로직 ===
                 if (isSurvivalActive) {
                     let elapsed = (Date.now() - survivalStartTime) / 1000;
                     let timeLeft = 60 - elapsed;
                     
                     if (timeLeft <= 0) {
-                        // 1분 생존 완료!
-                        isSurvivalActive = false;
-                        timerBox.style.display = "none";
+                        isSurvivalActive = false; timerBox.style.display = "none";
                         missionStatus.innerText = "목표: 게이트가 열렸습니다! 복도 끝 교장실로 진입하세요.";
                         missionStatus.style.color = "#00ffcc";
-                        
-                        // 앞을 가로막던 보안 게이트 삭제
                         walls = walls.filter(w => w.id !== "security_gate");
-                        
-                        // 화면 흔들림 + 알림
-                        alert("보안 시스템 해제 완료! 문이 열렸습니다!");
                     } else {
                         timerBox.innerText = timeLeft.toFixed(2);
-                        // 5초마다 몬스터 1마리 스폰 (위, 아래, 오른쪽 랜덤 위치에서)
                         if (Date.now() - lastSpawnTime > 5000) {
-                            let spawnDist = 600;
-                            let angle = Math.random() * Math.PI * 2;
+                            let spawnDist = 600; let angle = Math.random() * Math.PI * 2;
                             monsters.push({ 
-                                x: player.x + Math.cos(angle) * spawnDist, 
-                                y: player.y + Math.sin(angle) * spawnDist, 
+                                x: player.x + Math.cos(angle) * spawnDist, y: player.y + Math.sin(angle) * spawnDist, 
                                 radius: 20, speed: 4.5, hp: 6, isInvincible: false, color: "#800080" 
                             });
                             lastSpawnTime = Date.now();
@@ -300,14 +272,11 @@
                     }
                 }
 
-                // 5. 몬스터 AI (기본 속도 상향됨)
                 for (let i = monsters.length - 1; i >= 0; i--) {
                     let m = monsters[i];
                     const angle = Math.atan2(player.y - m.y, player.x - m.x);
-                    let mNextX = m.x + Math.cos(angle) * m.speed;
-                    let mNextY = m.y + Math.sin(angle) * m.speed;
+                    let mNextX = m.x + Math.cos(angle) * m.speed; let mNextY = m.y + Math.sin(angle) * m.speed;
                     
-                    // 보스 몬스터는 책상 같은 작은 장애물 무시하고 벽만 충돌
                     if (!checkCollision(m, mNextX, m.y)) m.x = mNextX;
                     if (!checkCollision(m, m.x, mNextY)) m.y = mNextY;
 
@@ -316,28 +285,22 @@
                         if (Math.hypot(b.x - m.x, b.y - m.y) < m.radius + b.radius) {
                             bullets.splice(j, 1);
                             if (!m.isInvincible) { 
-                                m.hp--; 
-                                if (m.hp <= 0) { monsters.splice(i, 1); break; } // 죽으면 배열에서 제거하고 루프 탈출
+                                m.hp--; if (m.hp <= 0) { monsters.splice(i, 1); break; }
                             }
                         }
                     }
-
                     if (monsters[i] && Math.hypot(player.x - m.x, player.y - m.y) < player.radius + m.radius) {
-                        player.x -= Math.cos(angle) * 15; // 맞으면 크게 밀려남
+                        player.x -= Math.cos(angle) * 15; 
                     }
                 }
 
-                // 6. 상호작용
                 let canInteract = false;
                 interactables.forEach(item => {
                     if (item.active && Math.hypot(player.x - item.x, player.y - item.y) < 80) { 
                         canInteract = true;
                         if (keys["KeyE"]) {
                             item.active = false; keys["KeyE"] = false; 
-                            
-                            if (item.id === "log") {
-                                missionStatus.innerText = "목표: 1학년 2반 교실에서 무기를 찾으세요."; startDialogue(item.story);
-                            }
+                            if (item.id === "log") { missionStatus.innerText = "목표: 1학년 2반 교실에서 무기를 찾으세요."; startDialogue(item.story); }
                             else if (item.id === "weapon") {
                                 player.hasWeapon = true; weaponStatus.style.display = "block";
                                 weaponStatus.innerText = "무기: 개조된 전동 네일건 (연사)";
@@ -346,34 +309,23 @@
                             } 
                             else if (item.id === "console") {
                                 startDialogue(item.story, () => {
-                                    // 1분 생존 모드 시작
-                                    isSurvivalActive = true;
-                                    survivalStartTime = Date.now();
-                                    lastSpawnTime = Date.now();
+                                    isSurvivalActive = true; survivalStartTime = Date.now(); lastSpawnTime = Date.now();
                                     timerBox.style.display = "block";
-                                    missionStatus.innerText = "목표: 문이 열릴 때까지 살아남으세요!!!";
-                                    missionStatus.style.color = "#ff4444";
+                                    missionStatus.innerText = "목표: 문이 열릴 때까지 살아남으세요!!!"; missionStatus.style.color = "#ff4444";
                                 });
                             }
                             else if (item.id === "master_key") {
-                                missionStatus.innerText = "목표: 빨리 시작 지점(왼쪽 끝 출구)으로 도망치세요!!";
-                                missionStatus.style.color = "#ff4444";
+                                missionStatus.innerText = "목표: 빨리 시작 지점(왼쪽 끝 출구)으로 도망치세요!!"; missionStatus.style.color = "#ff4444";
                                 startDialogue(item.story, () => {
                                     isChaseActive = true; warningBox.style.display = "block";
-                                    // 대망의 거대 보스 스폰 (속도 6.2로 플레이어 속도 7을 미친듯이 쫓아감)
                                     monsters.push({ x: 8300, y: 250, radius: 55, speed: 6.2, hp: 9999, isInvincible: true, color: "#ff0000" });
-                                    
-                                    // 돌아가는 길을 방해할 잔챙이 몬스터들 맵 곳곳에 배치
-                                    for(let k=1000; k<7000; k+=600) {
-                                        monsters.push({ x: k, y: 500, radius: 20, speed: 4, hp: 5, isInvincible: false, color: "#800080" });
-                                    }
+                                    for(let k=1000; k<7000; k+=600) { monsters.push({ x: k, y: 500, radius: 20, speed: 4, hp: 5, isInvincible: false, color: "#800080" }); }
                                 });
                             }
                         }
                     }
                 });
                 promptEl.style.display = canInteract ? "block" : "none";
-                
                 if (isChaseActive && player.x < 50) {
                     gameState = "WIN"; alert("🔥 10분의 사투 끝에 탈출 성공!! 당신은 전설입니다! 🔥"); location.reload();
                 }
@@ -384,7 +336,6 @@
             ctx.fillStyle = "#0a0a0c"; ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
             ctx.save(); ctx.translate(-camera.x, -camera.y);
 
-            // 맵을 8000px 이상 그리기
             ctx.fillStyle = "#111"; ctx.fillRect(-500, -500, 9500, 2000);
             ctx.strokeStyle = "#1a1a1c";
             for(let i=-500; i<9000; i+=100) { ctx.beginPath(); ctx.moveTo(i,-500); ctx.lineTo(i,1500); ctx.stroke(); }
@@ -392,9 +343,8 @@
 
             ctx.fillStyle = "#222";
             walls.forEach(w => { 
-                ctx.fillStyle = w.id === "security_gate" ? "#00ffcc" : "#222"; // 잠긴 문은 청록색으로 표시
-                ctx.fillRect(w.x, w.y, w.w, w.h); 
-                ctx.strokeStyle = "#444"; ctx.strokeRect(w.x, w.y, w.w, w.h); 
+                ctx.fillStyle = w.id === "security_gate" ? "#00ffcc" : "#222"; 
+                ctx.fillRect(w.x, w.y, w.w, w.h); ctx.strokeStyle = "#444"; ctx.strokeRect(w.x, w.y, w.w, w.h); 
             });
 
             interactables.forEach(item => {
@@ -409,11 +359,10 @@
             ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2); ctx.fill();
             ctx.restore(); 
 
-            // === 조명 캔버스 ===
             lightCtx.globalCompositeOperation = "source-over";
             let darkness = gameState === "STORY" ? "rgba(0,0,0,1)" : "rgba(0, 0, 5, 0.96)";
             if (isChaseActive && Math.random() > 0.8) darkness = "rgba(40, 0, 0, 0.95)"; 
-            if (isSurvivalActive && Math.random() > 0.9) darkness = "rgba(0, 40, 40, 0.95)"; // 생존 땐 청록색 깜빡임
+            if (isSurvivalActive && Math.random() > 0.9) darkness = "rgba(0, 40, 40, 0.95)"; 
 
             lightCtx.fillStyle = darkness; lightCtx.fillRect(0, 0, lightCanvas.width, lightCanvas.height);
 
@@ -429,7 +378,7 @@
                 gradient.addColorStop(1, "rgba(255, 255, 255, 0)");   
 
                 lightCtx.fillStyle = gradient; lightCtx.beginPath(); lightCtx.moveTo(screenPlayerX, screenPlayerY);
-                const beamWidth = isChaseActive ? 0.7 + Math.random()*0.1 : 1.0; // 시야를 더 넓게
+                const beamWidth = isChaseActive ? 0.7 + Math.random()*0.1 : 1.0; 
                 lightCtx.arc(screenPlayerX, screenPlayerY, 900, angle - beamWidth, angle + beamWidth); 
                 lightCtx.lineTo(screenPlayerX, screenPlayerY); lightCtx.fill();
                 
@@ -447,19 +396,16 @@
                 });
             }
 
-            // === 와이드 미니맵 업데이트 ===
             if (gameState === "EXPLORE") {
                 lightCtx.globalCompositeOperation = "source-over";
-                
-                const mmW = 350; const mmH = 80; // 길어진 맵에 맞춰 미니맵 가로를 넓힘
-                const mmX = window.innerWidth - mmW - 20; 
-                const mmY = 20;
+                const mmW = 350; const mmH = 80; 
+                const mmX = window.innerWidth - mmW - 20; const mmY = 20;
 
                 lightCtx.fillStyle = "rgba(0, 0, 0, 0.8)"; lightCtx.fillRect(mmX, mmY, mmW, mmH);
                 lightCtx.strokeStyle = "#444"; lightCtx.lineWidth = 2; lightCtx.strokeRect(mmX, mmY, mmW, mmH);
 
                 const mapStartX = -100; const mapStartY = -200;
-                const mapWidth = 8600; const mapHeight = 1200; // 넓어진 맵 기준 반영
+                const mapWidth = 8600; const mapHeight = 1200; 
                 const scaleX = mmW / mapWidth; const scaleY = mmH / mapHeight;
 
                 lightCtx.fillStyle = "#666";
