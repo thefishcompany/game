@@ -2,150 +2,168 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>CYBER-NET: COLLISION</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <title>Midnight Phantasm - Prologue</title>
     <style>
-        :root {
-            --neon-blue: #00f3ff;
-            --neon-pink: #ff00ff;
-            --bg-dark: #0a0a0c;
+        /* 깔끔한 폰트 적용 */
+        @import url('https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&display=swap');
+        
+        body { 
+            background: #000; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            margin: 0; 
+            font-family: 'Nanum Gothic', sans-serif; 
         }
 
-        body {
-            margin: 0;
-            background-color: var(--bg-dark);
-            color: white;
-            font-family: 'Orbitron', sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            overflow: hidden;
-            text-transform: uppercase;
+        /* 게임 화면 컨테이너 (800x600 고정) */
+        #game-container { 
+            position: relative; 
+            width: 800px; 
+            height: 600px; 
+            /* 임시 배경: 어두운 학교 느낌의 무료 이미지 */
+            background: url('https://images.unsplash.com/photo-1580584126903-c17d41830450?q=80&w=800&auto=format&fit=crop') no-repeat center/cover; 
+            overflow: hidden; 
+            border: 2px solid #333; 
+            box-shadow: 0 0 30px rgba(0,0,0,0.9); 
         }
 
-        h1 {
-            font-size: 3rem;
-            margin-bottom: 20px;
-            color: var(--neon-blue);
-            text-shadow: 0 0 10px var(--neon-blue), 0 0 20px var(--neon-blue);
-            letter-spacing: 5px;
+        /* 야간 효과 (어둡게 덮기) */
+        #overlay { 
+            position: absolute; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            background: rgba(0, 5, 20, 0.7); 
+            pointer-events: none; 
+        }
+        
+        /* 대화창 UI */
+        #dialogue-box { 
+            position: absolute; 
+            bottom: 20px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            width: 90%; 
+            height: 150px; 
+            background: rgba(0, 0, 0, 0.85); 
+            border: 2px solid #555; 
+            border-radius: 10px; 
+            color: white; 
+            padding: 20px; 
+            box-sizing: border-box; 
+            cursor: pointer; 
+            display: flex; 
+            flex-direction: column; 
+            user-select: none;
         }
 
-        #game-container {
-            position: relative;
-            padding: 5px;
-            background: linear-gradient(45deg, var(--neon-blue), var(--neon-pink));
-            border-radius: 10px;
-            box-shadow: 0 0 30px rgba(0, 243, 255, 0.3);
+        #speaker-name { 
+            font-size: 1.2rem; 
+            font-weight: bold; 
+            color: #ffeb3b; 
+            margin-bottom: 15px; 
+            text-shadow: 0 0 5px #ffeb3b;
         }
 
-        canvas {
-            display: block;
-            background: #111;
-            border-radius: 5px;
-            cursor: crosshair;
+        #dialogue-text { 
+            font-size: 1.1rem; 
+            line-height: 1.6; 
         }
 
-        .status-panel {
-            margin-top: 20px;
-            font-size: 0.9rem;
-            color: #888;
-            border: 1px dashed #444;
-            padding: 10px 20px;
+        /* 클릭 유도 깜빡임 효과 */
+        .blink { 
+            animation: blinker 1s linear infinite; 
+            font-size: 0.9rem; 
+            color: #aaa; 
+            align-self: flex-end; 
+            margin-top: auto; 
         }
-
-        .online-count {
-            color: var(--neon-pink);
-            font-weight: bold;
-        }
+        @keyframes blinker { 50% { opacity: 0; } }
     </style>
 </head>
 <body>
-
-    <h1>CYBER-NET</h1>
-
     <div id="game-container">
-        <canvas id="gameCanvas" width="800" height="500"></canvas>
+        <div id="overlay"></div>
+        <div id="dialogue-box">
+            <div id="speaker-name"></div>
+            <div id="dialogue-text"></div>
+            <div class="blink">클릭하여 진행 ▼</div>
+        </div>
     </div>
 
-    <div class="status-panel">
-        SYSTEM STATUS: <span class="online-count" id="userCount">CONNECTING...</span> PLAYERS ONLINE
-    </div>
+    <script>
+        // 대본 (스토리 데이터)
+        const story = [
+            { speaker: "???", text: "......" },
+            { speaker: "???", text: "야, 일어나..." },
+            { speaker: "나", text: "(머리가 깨질 것 같다. 분명 야간자율학습 중이었는데...)" },
+            { speaker: "나", text: "여긴... 우리 학교 교실? 왜 이렇게 어둡지? 정전인가?" },
+            { speaker: "시스템", text: "[경고] 자정이 지났습니다. '나이트메어 구역'으로 동기화됩니다." },
+            { speaker: "나", text: "뭐? 무슨 소리야. 복도에서 이상한 소리가 들려..." }
+        ];
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, onDisconnect } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+        let currentLine = 0;
+        let isTyping = false;
+        let textInterval;
+        
+        const speakerEl = document.getElementById("speaker-name");
+        const textEl = document.getElementById("dialogue-text");
+        const dialogueBox = document.getElementById("dialogue-box");
 
-        // ⚠️ 본인의 Firebase 설정을 여기에 넣어주세요!
-        const firebaseConfig = {
-            apiKey: "AIzaSyADgpfzj4-OCogjChrIwpIizjg-a6tiXzQ",
-            databaseURL: "https://game-49890-default-rtdb.firebaseio.com",
-            projectId: "game-49890",
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
-
-        const userId = "USER_" + Math.floor(Math.random() * 9999);
-        const playerRef = ref(db, `players/${userId}`);
-        const allPlayersRef = ref(db, 'players');
-
-        let players = {};
-        let myPos = { x: 400, y: 250, color: Math.random() > 0.5 ? '#00f3ff' : '#ff00ff', name: userId };
-
-        // 접속 및 해제 설정
-        set(playerRef, myPos);
-        onDisconnect(playerRef).remove();
-
-        // 조작 (부드러운 이동을 위해 속도값 조절 가능)
-        window.addEventListener("keydown", (e) => {
-            const speed = 10;
-            if (e.key === "ArrowUp") myPos.y -= speed;
-            if (e.key === "ArrowDown") myPos.y += speed;
-            if (e.key === "ArrowLeft") myPos.x -= speed;
-            if (e.key === "ArrowRight") myPos.x += speed;
-            set(playerRef, myPos);
-        });
-
-        const canvas = document.getElementById("gameCanvas");
-        const ctx = canvas.getContext("2d");
-        const userCountEl = document.getElementById("userCount");
-
-        onValue(allPlayersRef, (snapshot) => {
-            players = snapshot.val() || {};
-            userCountEl.innerText = Object.keys(players).length;
-            draw();
-        });
-
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // 격자무늬 배경 (사이버펑크 느낌)
-            ctx.strokeStyle = "#222";
-            for(let i=0; i<canvas.width; i+=40) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
-            for(let i=0; i<canvas.height; i+=40) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); ctx.stroke(); }
-
-            for (let id in players) {
-                const p = players[id];
-                
-                // 캐릭터 본체 (빛나는 효과)
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = p.color;
-                ctx.fillStyle = p.color;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, 12, 0, Math.PI * 2);
-                ctx.fill();
-                
-                // 이름표
-                ctx.shadowBlur = 0;
-                ctx.fillStyle = "white";
-                ctx.font = "10px Orbitron";
-                ctx.textAlign = "center";
-                ctx.fillText(p.name, p.x, p.y - 20);
+        // 한 글자씩 찍히는 타이핑 효과
+        function typeWriter(text, i, callback) {
+            if (i < text.length) {
+                textEl.innerHTML += text.charAt(i);
+                textInterval = setTimeout(() => typeWriter(text, i + 1, callback), 40); // 40ms 마다 한 글자
+            } else {
+                isTyping = false;
+                callback();
             }
         }
+
+        function showDialogue() {
+            // 대본이 끝나면
+            if (currentLine >= story.length) {
+                dialogueBox.style.display = 'none';
+                alert("오프닝 컷씬 종료! 이제 주인공을 움직이는 탐험 모드로 전환됩니다.");
+                // TODO: 여기에 캐릭터 이동 모드를 실행하는 함수 호출
+                return;
+            }
+
+            isTyping = true;
+            const line = story[currentLine];
+            speakerEl.innerText = line.speaker;
+            
+            // 시스템 메시지일 경우 글씨 색상 변경
+            if(line.speaker === "시스템") {
+                speakerEl.style.color = "#ff4444";
+                speakerEl.style.textShadow = "0 0 5px #ff4444";
+            } else {
+                speakerEl.style.color = "#ffeb3b";
+                speakerEl.style.textShadow = "0 0 5px #ffeb3b";
+            }
+
+            textEl.innerHTML = "";
+            typeWriter(line.text, 0, () => {});
+        }
+
+        // 마우스 클릭 이벤트
+        dialogueBox.addEventListener("click", () => {
+            if (isTyping) {
+                // 타이핑 중일 때 클릭하면, 스킵하고 전체 문장 바로 보여주기
+                clearTimeout(textInterval);
+                textEl.innerHTML = story[currentLine].text;
+                isTyping = false;
+            } else {
+                // 타이핑이 다 끝났을 때 클릭하면 다음 대사로
+                currentLine++;
+                showDialogue();
+            }
+        });
+
+        // 게임 시작!
+        showDialogue();
     </script>
 </body>
 </html>
