@@ -2,50 +2,37 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>PROJECT: ECHO - Monster Update</title>
+    <title>Midnight Phantasm - The Chase</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700&display=swap');
-        
-        body { 
-            margin: 0; background: #000; overflow: hidden; 
-            color: white; font-family: 'Nanum Gothic', sans-serif; user-select: none;
-        }
-        
+        body { margin: 0; background: #000; overflow: hidden; color: white; font-family: 'Nanum Gothic', sans-serif; user-select: none; }
         #game-container { position: relative; width: 100vw; height: 100vh; }
         canvas { position: absolute; top: 0; left: 0; }
         #lightCanvas { pointer-events: none; } 
 
-        #ui-layer { 
-            position: absolute; top: 15px; left: 15px; z-index: 10; 
-            text-shadow: 1px 1px 2px black; color: #888; font-size: 0.9rem;
+        #ui-layer { position: absolute; top: 15px; left: 15px; z-index: 10; text-shadow: 1px 1px 2px black; color: #aaa; font-size: 0.9rem; }
+        #weapon-status { color: #ffeb3b; font-weight: bold; font-size: 1.2rem; margin-top: 10px; display: none; }
+        #mission-status { color: #00ffcc; font-weight: bold; font-size: 1.2rem; margin-top: 5px; }
+        #warning-box {
+            position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+            color: #ff4444; font-size: 3rem; font-weight: bold; text-shadow: 0 0 20px red;
+            display: none; z-index: 15; animation: blink 0.5s infinite alternate; pointer-events: none;
         }
-        
-        #weapon-status { color: #ff4444; font-weight: bold; font-size: 1.2rem; margin-top: 10px; display: none; }
+        @keyframes blink { from { opacity: 1; } to { opacity: 0.2; } }
 
-        /* 💡 힌트 박스 UI */
-        #hint-box {
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            background: rgba(255, 235, 59, 0.2); border: 1px solid #ffeb3b; color: #ffeb3b;
-            padding: 10px 20px; border-radius: 5px; font-weight: bold; font-size: 1rem;
-            display: none; z-index: 15; text-shadow: 0 0 5px black;
-        }
-
-        /* 대화창 텍스트 잘림 방지 (word-break 적용) */
         #dialogue-box { 
             position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); 
-            width: 80%; max-width: 800px; height: 150px; 
-            background: rgba(0, 10, 20, 0.9); border: 2px solid #00ffcc; 
-            border-radius: 5px; padding: 20px; box-sizing: border-box; 
-            cursor: pointer; display: flex; flex-direction: column; z-index: 20;
-            box-shadow: 0 0 20px rgba(0, 255, 204, 0.2);
+            width: 80%; max-width: 800px; height: 150px; background: rgba(0, 10, 20, 0.9); 
+            border: 2px solid #aaa; border-radius: 5px; padding: 20px; box-sizing: border-box; 
+            cursor: pointer; display: flex; flex-direction: column; z-index: 20; display: none;
         }
         #speaker-name { font-size: 1.2rem; font-weight: bold; margin-bottom: 10px; flex-shrink: 0; }
         #dialogue-text { font-size: 1.1rem; line-height: 1.6; word-break: keep-all; white-space: pre-wrap; overflow-y: auto; }
         
         #interaction-prompt {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            font-size: 1.2rem; font-weight: bold; color: #ffeb3b;
-            text-shadow: 0 0 10px black; display: none; z-index: 15; pointer-events: none;
+            font-size: 1.2rem; font-weight: bold; color: #ffeb3b; text-shadow: 0 0 10px black; 
+            display: none; z-index: 15; pointer-events: none;
         }
     </style>
 </head>
@@ -55,14 +42,13 @@
         <canvas id="lightCanvas"></canvas>
 
         <div id="ui-layer">
-            <div>PROJECT: ECHO | Alpha 0.3</div>
-            <div id="controls-info" style="display:none; color: #00ffcc; margin-top: 10px;">
-                [W,A,S,D] 이동 | [마우스] 조준 | [좌클릭] 사격 | [E] 조사
-            </div>
-            <div id="weapon-status">무기: 낡은 권총 장착됨</div>
+            <div>나이트메어 스쿨 | 1층 복도</div>
+            <div id="controls-info" style="color: #00ffcc; margin-top: 10px;">[W,A,S,D] 이동 | [마우스] 조준 | [좌클릭] 사격 | [E] 조사</div>
+            <div id="mission-status">목표: 어둠 속에서 무기를 찾으세요.</div>
+            <div id="weapon-status">무기: 개조된 네일건 장착됨</div>
         </div>
 
-        <div id="hint-box">💡 시스템 알림: 화면 7시 방향의 붉은 빛을 조사해 무기를 확보하십시오.</div>
+        <div id="warning-box">도망쳐!!!</div>
         <div id="interaction-prompt">[E] 키를 눌러 조사하기</div>
 
         <div id="dialogue-box">
@@ -85,16 +71,15 @@
         resize();
 
         let gameState = "STORY"; 
+        let isChaseActive = false; // 추격전 모드 활성화 여부
         
-        // 플레이어, 총알, 몬스터 설정
-        const player = { x: window.innerWidth / 2, y: window.innerHeight / 2, radius: 15, speed: 4, hasWeapon: false };
+        // 플레이어 (시작 위치: 복도 맨 왼쪽)
+        const player = { x: 200, y: 300, radius: 15, speed: 5, hasWeapon: false };
+        const camera = { x: 0, y: 0 }; // 카메라 시스템
         const keys = {};
-        const mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 - 100 };
+        const mouse = { x: window.innerWidth/2, y: window.innerHeight/2 };
         const bullets = []; 
-        const monsters = []; // 몬스터 배열 추가
-
-        // 힌트 타이머
-        let hintTimer = null;
+        const monsters = [];
 
         window.addEventListener("keydown", (e) => keys[e.code] = true);
         window.addEventListener("keyup", (e) => keys[e.code] = false);
@@ -102,56 +87,69 @@
 
         window.addEventListener("mousedown", (e) => {
             if (gameState === "EXPLORE" && player.hasWeapon) {
-                const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+                // 카메라 좌표를 반영한 마우스 실제 위치 계산
+                const worldMouseX = mouse.x + camera.x;
+                const worldMouseY = mouse.y + camera.y;
+                const angle = Math.atan2(worldMouseY - player.y, worldMouseX - player.x);
                 bullets.push({
-                    x: player.x,
-                    y: player.y,
-                    vx: Math.cos(angle) * 15,
-                    vy: Math.sin(angle) * 15,
+                    x: player.x, y: player.y,
+                    vx: Math.cos(angle) * 20, vy: Math.sin(angle) * 20,
                     radius: 3
                 });
             }
         });
 
+        // UI 요소들
         const dialogueBox = document.getElementById("dialogue-box");
         const speakerEl = document.getElementById("speaker-name");
         const textEl = document.getElementById("dialogue-text");
         const promptEl = document.getElementById("interaction-prompt");
-        const controlsInfo = document.getElementById("controls-info");
         const weaponStatus = document.getElementById("weapon-status");
-        const hintBox = document.getElementById("hint-box");
+        const missionStatus = document.getElementById("mission-status");
+        const warningBox = document.getElementById("warning-box");
+
+        // 맵 구조물 (벽, 책상 등) - x, y, width, height
+        const walls = [
+            { x: 0, y: 150, w: 2000, h: 50 }, // 위쪽 복도 벽
+            { x: 0, y: 500, w: 1500, h: 50 }, // 아래쪽 복도 벽
+            { x: 0, y: 150, w: 50, h: 400 }, // 왼쪽 막힌 벽 (출구)
+            { x: 1500, y: 500, w: 50, h: 300 }, // 교장실 들어가는 벽
+            { x: 1500, y: 800, w: 500, h: 50 }, // 교장실 아래 벽
+            { x: 2000, y: 150, w: 50, h: 700 }  // 교장실 오른쪽 끝 벽
+        ];
+
+        // 대본
+        const introStory = [
+            { speaker: "나", color: "#fff", text: "(야간 자율학습 중 깜빡 잠이 들었다. 깨어보니 학교 전체가 정전이다.)" },
+            { speaker: "나", color: "#fff", text: "이상해. 밖에서 창문을 긁는 듯한 기분 나쁜 소리가 들려..." },
+            { speaker: "시스템", color: "#ff4444", text: "[경고] 자정이 지났습니다. 학교가 '이면 세계'로 동기화됩니다." },
+            { speaker: "나", color: "#fff", text: "일단 1층 현관으로 나가자. 그 전에 몸을 지킬 만한 걸 찾아야 해." }
+        ];
+
+        const weaponStory = [
+            { speaker: "나", color: "#fff", text: "공구함이 엎어져 있다. 안에 쓸만한 게 있나?" },
+            { speaker: "시스템", color: "#ffeb3b", text: "[개조된 네일건]을 획득했습니다! (마우스 좌클릭 발사)" },
+            { speaker: "나", color: "#fff", text: "못을 발사하는 공구군. 꽤 무겁지만 무기로 쓸 수 있겠어." },
+            { speaker: "나", color: "#fff", text: "이제 복도 끝 교장실로 가서 현관 [마스터 키]를 찾자." }
+        ];
+
+        const keyStory = [
+            { speaker: "나", color: "#fff", text: "교장실 책상 위에 열쇠가 있어! 이것만 있으면 나갈 수 있어." },
+            { speaker: "시스템", color: "#ffeb3b", text: "[현관 마스터 키] 획득! 1층 출구로 돌아가 탈출하십시오." },
+            { speaker: "???", color: "#ff4444", text: "KIIIIEEEEEEAAAKK!!!!" },
+            { speaker: "나", color: "#fff", text: "...미친, 방금 무슨 소리야?! 빨리 처음 있던 곳(출구)으로 도망쳐야 해!!" }
+        ];
 
         let currentStory = [];
         let currentLine = 0;
         let isTyping = false;
         let textInterval;
 
-        const introStory = [
-            { speaker: "나", color: "#fff", text: "(머리가 깨질 것 같다... 너무 어두워서 아무것도 안 보여.)" },
-            { speaker: "나", color: "#fff", text: "(어둠 속에서 기분 나쁜 마찰음이 들려오고 있어. 방어할 수단이 필요해.)" },
-            { speaker: "시스템", color: "#ff4444", text: "[경고] 생명 신호 감지. 접근 중." },
-            { speaker: "나", color: "#fff", text: "젠장, 손전등을 켜고 쓸만한 무기를 찾아야겠다." }
-        ];
-
-        const itemStory = [
-            { speaker: "연구 일지", color: "#00ffcc", text: "『실험체 042는 총격에 강한 내성을 지니지만, 소리에 민감하다.』" }
-        ];
-
-        const weaponStory = [
-            { speaker: "나", color: "#fff", text: "경비원의 시체다... 손에 권총을 꽉 쥐고 죽었어." },
-            { speaker: "시스템", color: "#ff4444", text: "[낡은 권총]을 획득했습니다. (마우스 좌클릭 발사)" },
-            { speaker: "나", color: "#fff", text: "탄창은 반쯤 차있군. 다행이야..." },
-            { speaker: "나", color: "#fff", text: "...잠깐, 저 소리는 뭐지?" }
-        ];
-
         function startDialogue(storyData, onComplete = null) {
             gameState = "STORY";
             currentStory = storyData;
             currentLine = 0;
             dialogueBox.style.display = "flex";
-            controlsInfo.style.display = "none";
-            
-            // 대화가 끝났을 때 실행할 콜백 함수 저장
             dialogueBox.onComplete = onComplete; 
             showDialogue();
         }
@@ -160,22 +158,14 @@
             if (i < text.length) {
                 textEl.innerHTML += text.charAt(i);
                 textInterval = setTimeout(() => typeWriter(text, i + 1), 30);
-            } else {
-                isTyping = false;
-            }
+            } else { isTyping = false; }
         }
 
         function showDialogue() {
             if (currentLine >= currentStory.length) {
                 dialogueBox.style.display = 'none';
-                controlsInfo.style.display = "block";
                 gameState = "EXPLORE";
-                
-                // 대화 종료 콜백이 있으면 실행
-                if (dialogueBox.onComplete) {
-                    dialogueBox.onComplete();
-                    dialogueBox.onComplete = null;
-                }
+                if (dialogueBox.onComplete) { dialogueBox.onComplete(); dialogueBox.onComplete = null; }
                 return;
             }
             isTyping = true;
@@ -191,188 +181,225 @@
                 clearTimeout(textInterval);
                 textEl.innerHTML = currentStory[currentLine].text;
                 isTyping = false;
-            } else {
-                currentLine++;
-                showDialogue();
-            }
+            } else { currentLine++; showDialogue(); }
         });
 
-        // 맵에 배치된 상호작용 아이템
         const interactables = [
-            { id: "log", x: window.innerWidth / 2 + 200, y: window.innerHeight / 2 - 50, radius: 15, color: "#00ffcc", active: true, story: itemStory },
-            { id: "weapon", x: window.innerWidth / 2 - 200, y: window.innerHeight / 2 + 150, radius: 15, color: "#ff4444", active: true, story: weaponStory }
+            { id: "weapon", x: 600, y: 350, radius: 15, color: "#ffeb3b", active: true, story: weaponStory },
+            { id: "master_key", x: 1800, y: 650, radius: 15, color: "#00ffcc", active: true, story: keyStory }
         ];
 
-        // 몬스터 소환 함수
-        function spawnMonster() {
-            monsters.push({
-                x: player.x + 500, // 플레이어 우측 멀리서 스폰
-                y: player.y - 300,
-                radius: 20,
-                speed: 2,
-                hp: 3 // 총알 3대 맞아야 죽음
-            });
+        // 벽 충돌 체크 함수
+        function checkCollision(nx, ny) {
+            for (let w of walls) {
+                // 플레이어의 다음 위치(nx, ny)가 벽(w)과 겹치는지 확인 (간단한 AABB 충돌)
+                if (nx + player.radius > w.x && nx - player.radius < w.x + w.w &&
+                    ny + player.radius > w.y && ny - player.radius < w.y + w.h) {
+                    return true; // 충돌함
+                }
+            }
+            return false;
         }
 
         function update() {
             if (gameState === "EXPLORE") {
-                // 이동 처리
-                if (keys["KeyW"]) player.y -= player.speed;
-                if (keys["KeyS"]) player.y += player.speed;
-                if (keys["KeyA"]) player.x -= player.speed;
-                if (keys["KeyD"]) player.x += player.speed;
+                // 이동 및 벽 충돌 처리
+                let nextX = player.x;
+                let nextY = player.y;
+
+                if (keys["KeyW"]) nextY -= player.speed;
+                if (keys["KeyS"]) nextY += player.speed;
+                if (keys["KeyA"]) nextX -= player.speed;
+                if (keys["KeyD"]) nextX += player.speed;
+
+                // X축 이동 시도
+                if (!checkCollision(nextX, player.y)) player.x = nextX;
+                // Y축 이동 시도
+                if (!checkCollision(player.x, nextY)) player.y = nextY;
+
+                // 카메라 위치 업데이트 (플레이어를 화면 중앙에)
+                camera.x = player.x - window.innerWidth / 2;
+                camera.y = player.y - window.innerHeight / 2;
 
                 // 총알 이동
                 bullets.forEach((b, index) => {
-                    b.x += b.vx;
-                    b.y += b.vy;
-                    if (b.x < 0 || b.x > window.innerWidth || b.y < 0 || b.y > window.innerHeight) {
-                        bullets.splice(index, 1);
-                    }
+                    b.x += b.vx; b.y += b.vy;
+                    // 간단히 너무 멀어지면 삭제
+                    if (Math.hypot(b.x - player.x, b.y - player.y) > 1000) bullets.splice(index, 1);
                 });
 
-                // 몬스터 AI (플레이어 추적) 및 충돌 체크
+                // 몬스터 AI (추격)
                 monsters.forEach((m, mIndex) => {
-                    // 플레이어 쪽으로 이동
                     const angle = Math.atan2(player.y - m.y, player.x - m.x);
                     m.x += Math.cos(angle) * m.speed;
                     m.y += Math.sin(angle) * m.speed;
 
-                    // 총알 피격 판정
                     bullets.forEach((b, bIndex) => {
                         const dist = Math.hypot(b.x - m.x, b.y - m.y);
                         if (dist < m.radius + b.radius) {
-                            m.hp--; // 체력 감소
-                            bullets.splice(bIndex, 1); // 총알 삭제
-                            if (m.hp <= 0) {
-                                monsters.splice(mIndex, 1); // 몬스터 사망
+                            bullets.splice(bIndex, 1);
+                            if (!m.isInvincible) { // 보스는 무적
+                                m.hp--; 
+                                if (m.hp <= 0) monsters.splice(mIndex, 1);
                             }
                         }
                     });
 
-                    // 플레이어 피격 판정 (임시: 맞으면 밀려남)
-                    const pDist = Math.hypot(player.x - m.x, player.y - m.y);
-                    if (pDist < player.radius + m.radius) {
-                        player.x -= Math.cos(angle) * 10;
-                        player.y -= Math.sin(angle) * 10;
+                    // 플레이어 피격
+                    if (Math.hypot(player.x - m.x, player.y - m.y) < player.radius + m.radius) {
+                        player.x -= Math.cos(angle) * 15; // 밀쳐짐
+                        // 화면 흔들림 효과 추가 가능
                     }
                 });
 
-                // 상호작용 처리
+                // 상호작용
                 let canInteract = false;
                 interactables.forEach(item => {
                     if (item.active) {
-                        const dist = Math.hypot(player.x - item.x, player.y - item.y);
-                        if (dist < 80) { 
+                        if (Math.hypot(player.x - item.x, player.y - item.y) < 80) { 
                             canInteract = true;
                             if (keys["KeyE"]) {
-                                item.active = false; 
-                                keys["KeyE"] = false; 
+                                item.active = false; keys["KeyE"] = false; 
                                 
                                 if(item.id === "weapon") {
-                                    clearTimeout(hintTimer); // 무기 찾으면 힌트 타이머 종료
-                                    hintBox.style.display = "none";
                                     player.hasWeapon = true;
                                     weaponStatus.style.display = "block";
-                                    
-                                    // 무기 스토리가 끝난 '직후에' 몬스터 소환
-                                    startDialogue(item.story, () => {
-                                        spawnMonster(); 
-                                    });
-                                } else {
+                                    missionStatus.innerText = "목표: 복도 오른쪽 끝 교장실에서 마스터 키를 찾으세요.";
                                     startDialogue(item.story);
+                                    
+                                    // 무기 먹으면 잔챙이 몬스터 스폰
+                                    monsters.push({ x: 1000, y: 350, radius: 20, speed: 2, hp: 3, isInvincible: false, color: "#800080" });
+                                } 
+                                else if (item.id === "master_key") {
+                                    missionStatus.innerText = "목표: 빨리 시작 지점(왼쪽 끝 출구)으로 도망치세요!!";
+                                    missionStatus.style.color = "#ff4444";
+                                    
+                                    startDialogue(item.story, () => {
+                                        // 대화 끝나면 추격전 시작!!
+                                        isChaseActive = true;
+                                        warningBox.style.display = "block";
+                                        
+                                        // 거대 보스 '그림자 수위' 스폰 (무적, 엄청 빠름)
+                                        monsters.push({ x: 2000, y: 700, radius: 40, speed: 4.5, hp: 999, isInvincible: true, color: "#ff0000" });
+                                    });
                                 }
                             }
                         }
                     }
                 });
                 promptEl.style.display = canInteract ? "block" : "none";
+                
+                // 승리 조건: 열쇠를 먹고 왼쪽 끝 출구(x < 100)로 돌아오면 성공
+                if (isChaseActive && player.x < 100) {
+                    gameState = "WIN";
+                    alert("탈출 성공!! (데모 버전 클리어)");
+                    location.reload();
+                }
             }
         }
 
         function draw() {
-            // 메인 도화지 (바닥과 물체)
-            ctx.fillStyle = "#1a1a24"; 
+            // 배경 (검은색)
+            ctx.fillStyle = "#0a0a0c"; 
             ctx.fillRect(0, 0, gameCanvas.width, gameCanvas.height);
 
-            ctx.strokeStyle = "#223";
-            for(let i=0; i<gameCanvas.width; i+=100) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,gameCanvas.height); ctx.stroke(); }
-            for(let i=0; i<gameCanvas.height; i+=100) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(gameCanvas.width,i); ctx.stroke(); }
+            // 카메라 적용 시작! (화면을 플레이어 반대 방향으로 민다)
+            ctx.save();
+            ctx.translate(-camera.x, -camera.y);
 
+            // 바닥 타일 (복도 느낌)
+            ctx.strokeStyle = "#1a1a1c";
+            for(let i=-500; i<3000; i+=100) { ctx.beginPath(); ctx.moveTo(i,-500); ctx.lineTo(i,1500); ctx.stroke(); }
+            for(let i=-500; i<1500; i+=100) { ctx.beginPath(); ctx.moveTo(-500,i); ctx.lineTo(3000,i); ctx.stroke(); }
+
+            // 벽 그리기
+            ctx.fillStyle = "#222";
+            walls.forEach(w => {
+                ctx.fillRect(w.x, w.y, w.w, w.h);
+                ctx.strokeStyle = "#444";
+                ctx.strokeRect(w.x, w.y, w.w, w.h);
+            });
+
+            // 아이템
             interactables.forEach(item => {
                 if (item.active) {
-                    ctx.shadowBlur = 20;
-                    ctx.shadowColor = item.color;
-                    ctx.fillStyle = item.color;
-                    ctx.beginPath();
-                    ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
-                    ctx.fill();
+                    ctx.shadowBlur = 20; ctx.shadowColor = item.color; ctx.fillStyle = item.color;
+                    ctx.beginPath(); ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2); ctx.fill();
                     ctx.shadowBlur = 0; 
                 }
             });
 
-            // 몬스터 그리기 (기괴한 보라색)
-            ctx.fillStyle = "#800080";
+            // 몬스터
             monsters.forEach(m => {
-                ctx.beginPath();
-                ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.fillStyle = m.color;
+                ctx.beginPath(); ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2); ctx.fill();
             });
 
-            // 총알 그리기
+            // 총알
             ctx.fillStyle = "#ffeb3b";
             bullets.forEach(b => {
-                ctx.beginPath();
-                ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2); ctx.fill();
             });
 
             // 플레이어
             ctx.fillStyle = "#fff";
-            ctx.beginPath();
-            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2); ctx.fill();
+
+            ctx.restore(); // 메인 캔버스 카메라 적용 끝
 
             // === 조명 캔버스 (어둠 덮기) ===
             lightCtx.globalCompositeOperation = "source-over";
-            const darkness = gameState === "STORY" ? "rgba(0,0,0,1)" : "rgba(0, 0, 0, 0.97)";
+            
+            // 추격전이 시작되면 붉은빛이 깜빡거리는 연출
+            let darkness = gameState === "STORY" ? "rgba(0,0,0,1)" : "rgba(0, 0, 5, 0.98)";
+            if (isChaseActive && Math.random() > 0.8) darkness = "rgba(50, 0, 0, 0.95)"; 
+
             lightCtx.fillStyle = darkness; 
             lightCtx.fillRect(0, 0, lightCanvas.width, lightCanvas.height);
 
             if (gameState === "EXPLORE") {
                 lightCtx.globalCompositeOperation = "destination-out";
                 
-                // 손전등
-                const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
-                const gradient = lightCtx.createRadialGradient(player.x, player.y, 0, player.x, player.y, 600);
+                // 조명도 카메라 영향을 받아야 하므로, 화면 정중앙(플레이어 위치) 기준으로 그린다
+                const screenPlayerX = window.innerWidth / 2;
+                const screenPlayerY = window.innerHeight / 2;
+                
+                const worldMouseX = mouse.x + camera.x;
+                const worldMouseY = mouse.y + camera.y;
+                const angle = Math.atan2(worldMouseY - player.y, worldMouseX - player.x);
+                
+                const gradient = lightCtx.createRadialGradient(screenPlayerX, screenPlayerY, 0, screenPlayerX, screenPlayerY, 600);
                 gradient.addColorStop(0, "rgba(255, 255, 255, 1)");   
-                gradient.addColorStop(0.7, "rgba(255, 255, 255, 0.3)"); 
+                gradient.addColorStop(0.7, "rgba(255, 255, 255, 0.2)"); 
                 gradient.addColorStop(1, "rgba(255, 255, 255, 0)");   
 
                 lightCtx.fillStyle = gradient;
                 lightCtx.beginPath();
-                lightCtx.moveTo(player.x, player.y);
-                lightCtx.arc(player.x, player.y, 600, angle - 0.45, angle + 0.45); 
-                lightCtx.lineTo(player.x, player.y);
+                lightCtx.moveTo(screenPlayerX, screenPlayerY);
+                // 추격전 땐 손전등이 미친듯이 흔들리는 효과(시야각 좁아짐)
+                const beamWidth = isChaseActive ? 0.3 + Math.random()*0.1 : 0.45;
+                lightCtx.arc(screenPlayerX, screenPlayerY, 600, angle - beamWidth, angle + beamWidth); 
+                lightCtx.lineTo(screenPlayerX, screenPlayerY);
                 lightCtx.fill();
                 
                 lightCtx.beginPath();
-                lightCtx.arc(player.x, player.y, 60, 0, Math.PI * 2);
+                lightCtx.arc(screenPlayerX, screenPlayerY, 60, 0, Math.PI * 2);
                 lightCtx.fillStyle = "rgba(255, 255, 255, 0.3)";
                 lightCtx.fill();
 
+                // 총알 빛 (카메라 좌표 변환)
                 bullets.forEach(b => {
                     lightCtx.beginPath();
-                    lightCtx.arc(b.x, b.y, 30, 0, Math.PI * 2);
+                    lightCtx.arc(b.x - camera.x, b.y - camera.y, 40, 0, Math.PI * 2);
                     lightCtx.fillStyle = "rgba(255, 255, 255, 0.8)";
                     lightCtx.fill();
                 });
 
-                // 몬스터의 안광 (어둠 속에서 빛나는 붉은 눈)
+                // 몬스터 안광 (카메라 좌표 변환)
                 monsters.forEach(m => {
                     lightCtx.beginPath();
-                    lightCtx.arc(m.x, m.y, 15, 0, Math.PI * 2);
-                    lightCtx.fillStyle = "rgba(255, 0, 0, 0.2)"; // 붉은 눈빛이 은은하게 보임
+                    lightCtx.arc(m.x - camera.x, m.y - camera.y, m.radius, 0, Math.PI * 2);
+                    lightCtx.fillStyle = m.isInvincible ? "rgba(255, 0, 0, 0.5)" : "rgba(255, 0, 0, 0.2)";
                     lightCtx.fill();
                 });
             }
@@ -383,14 +410,8 @@
             });
         }
 
-        // 오프닝 시작 시 타이머 세팅
+        startDialogue(introStory); 
         draw();
-        startDialogue(introStory, () => {
-            // 오프닝 대화가 끝나고 탐험이 시작되면 10초 타이머 작동
-            hintTimer = setTimeout(() => {
-                hintBox.style.display = "block";
-            }, 10000);
-        }); 
     </script>
 </body>
 </html>
